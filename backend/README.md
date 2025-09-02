@@ -113,3 +113,34 @@ Response
 json
 { "message": "Task deleted" }
 ```
+
+# DevOps Fullstack Portfolio – Module 1: Backend, Dockerized Database, & API Testing
+
+## Overview
+
+This module demonstrates a practical and modern DevOps setup:
+
+- Node.js/Express.js REST API for "tasks"
+- PostgreSQL database running in Docker
+- Full CRUD support for tasks (Create, Read, Update, Delete)
+- Environment configuration via `.env`
+- Automated API testing with **Jest** and **Supertest**
+- Manual API testing with Postman or Insomnia
+
+---
+
+## Architecture
+
+![Backend and Dockerized Postgres](https://i.imgur.com/ViK4DbC.png)
+
+- **Backend:** Express.js REST API (`backend/`) running locally.
+- **Database:** PostgreSQL in a Docker container (`devops-postgres`).
+- **.env:** All DB credentials and settings managed via environment variables.
+- _Frontend and full containerization come in later modules!_
+
+---
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/)
+- [Docker Desktop](https://www.docker

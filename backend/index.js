@@ -15,13 +15,29 @@ const pool = new Pool({
     password: process.env.PGPASSWORD
 });
 
-// Middleware
+// 👉 Add test connection route
+app.get('/test-db', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT NOW()');
+        res.json({ now: result.rows[0].now, message: 'DB connected successfully!' });
+    } catch (err) {
+        console.error('❌ DB connection failed:', err.message);
+        res.status(500).json({ error: 'Database connection failed.' });
+    }
+});
+
+// 👉 Middleware to log every request
+app.use((req, res, next) => {
+    console.log(`➡️ ${req.method} ${req.path}`);
+    next();
+});
+
 app.use(cors());
 app.use(express.json());
 
-// Root route (optional)
+// Root route
 app.get('/', (req, res) => {
-    res.json({ message: "API is running!" });
+    res.json({ message: "API is running! Visit /test-db to check DB connection." });
 });
 
 // ========== CRUD Endpoints for 'tasks' ==========
@@ -29,9 +45,12 @@ app.get('/', (req, res) => {
 // Get all tasks
 app.get('/tasks', async (req, res) => {
     try {
+        console.log('🔍 Fetching all tasks...');
         const result = await pool.query('SELECT * FROM tasks ORDER BY id');
+        console.log(`📊 Found ${result.rows.length} task(s)`);
         res.json(result.rows);
     } catch (error) {
+        console.error('❌ GET /tasks error:', error.message);
         res.status(500).json({ error: 'Failed to fetch tasks.' });
     }
 });
@@ -40,12 +59,15 @@ app.get('/tasks', async (req, res) => {
 app.get('/tasks/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        console.log(`🔍 Fetching task with id=${id}`);
         const result = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
         if (result.rows.length === 0) {
+            console.log(`🚫 Task id=${id} not found`);
             return res.status(404).json({ error: 'Task not found.' });
         }
         res.json(result.rows[0]);
     } catch (error) {
+        console.error(`❌ GET /tasks/${req.params.id} error:`, error.message);
         res.status(500).json({ error: 'Failed to fetch task.' });
     }
 });
@@ -53,16 +75,26 @@ app.get('/tasks/:id', async (req, res) => {
 // Create a new task
 app.post('/tasks', async (req, res) => {
     try {
+        console.log('📥 POST /tasks body:', req.body); // Log input
+
         const { title, completed = false } = req.body;
-        if (!title) {
+
+        if (!title || typeof title !== 'string' || !title.trim()) {
+            console.log('🚫 Validation failed: title is required');
             return res.status(400).json({ error: 'Title is required.' });
         }
+
         const result = await pool.query(
             'INSERT INTO tasks (title, completed) VALUES ($1, $2) RETURNING *',
-            [title, completed]
+            [title.trim(), completed]
         );
-        res.status(201).json(result.rows[0]);
+
+        const newTask = result.rows[0];
+        console.log('✅ CREATED:', newTask); // Confirm creation
+
+        res.status(201).json(newTask); // ✅ Only one send
     } catch (error) {
+        console.error('❌ POST /tasks error:', error.message);
         res.status(500).json({ error: 'Failed to create task.' });
     }
 });
@@ -72,17 +104,27 @@ app.put('/tasks/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { title, completed } = req.body;
-        // Optionally, check if task exists
+
+        console.log(`🔄 Updating task id=${id}`, { title, completed });
+
         const findTask = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
         if (findTask.rows.length === 0) {
+            console.log(`🚫 Task id=${id} not found`);
             return res.status(404).json({ error: 'Task not found.' });
         }
+
         const result = await pool.query(
-            'UPDATE tasks SET title=$1, completed=$2 WHERE id=$3 RETURNING *',
-            [title ?? findTask.rows[0].title, typeof completed === 'boolean' ? completed : findTask.rows[0].completed, id]
+            'UPDATE tasks SET title = $1, completed = $2 WHERE id = $3 RETURNING *',
+            [
+                title ?? findTask.rows[0].title,
+                typeof completed === 'boolean' ? completed : findTask.rows[0].completed,
+                id
+            ]
         );
+
         res.json(result.rows[0]);
     } catch (error) {
+        console.error(`❌ PUT /tasks/${req.params.id} error:`, error.message);
         res.status(500).json({ error: 'Failed to update task.' });
     }
 });
@@ -91,20 +133,31 @@ app.put('/tasks/:id', async (req, res) => {
 app.delete('/tasks/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('DELETE FROM tasks WHERE id=$1 RETURNING *', [id]);
+        console.log(`🗑️ Deleting task id=${id}`);
+
+        const result = await pool.query('DELETE FROM tasks WHERE id = $1 RETURNING *', [id]);
+
         if (result.rows.length === 0) {
+            console.log(`🚫 DELETE: Task id=${id} not found`);
             return res.status(404).json({ error: 'Task not found.' });
         }
-        res.json({ message: 'Task deleted' });
+
+        console.log('✅ Deleted:', result.rows[0]);
+        res.json({ message: 'Task deleted successfully.' });
     } catch (error) {
+        console.error(`❌ DELETE /tasks/${req.params.id} error:`, error.message);
         res.status(500).json({ error: 'Failed to delete task.' });
     }
 });
 
 // --- Start server only if not in test (for Supertest/Jest compatibility) ---
 if (require.main === module) {
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    app.listen(PORT, () => {
+        console.log(`✅ Server is running on http://localhost:${PORT}`);
+        console.log(`🔧 Test DB: GET http://localhost:${PORT}/test-db`);
+        console.log(`📋 API Root: GET http://localhost:${PORT}/`);
+    });
 }
 
-module.exports = app; // so tests can import the app
-module.exports.pool = pool; // add this!
+module.exports = app;
+module.exports.pool = pool;
